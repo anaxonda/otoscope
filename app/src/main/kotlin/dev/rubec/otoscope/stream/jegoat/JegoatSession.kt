@@ -6,6 +6,7 @@ import dev.rubec.otoscope.debug.FileLog as Log
 import dev.rubec.otoscope.stream.BatteryStatus
 import dev.rubec.otoscope.stream.CameraSession
 import dev.rubec.otoscope.stream.JpegDecoder
+import dev.rubec.otoscope.stream.LedControl
 import dev.rubec.otoscope.stream.SessionStats
 import dev.rubec.otoscope.stream.bindOrTerminal
 import dev.rubec.otoscope.stream.toHex
@@ -68,6 +69,17 @@ class JegoatSession(
 
     private val _terminalError = MutableStateFlow<String?>(null)
     override val terminalError: StateFlow<String?> = _terminalError.asStateFlow()
+
+    // JEGOAT does not report LED state in telemetry. This tracks the requested
+    // state; collecting it once the control socket is ready also turns the
+    // light on at connection time and preserves requests made during setup.
+    private val ledEnabled = MutableStateFlow(true)
+    override val led: LedControl = object : LedControl {
+        override val enabled: StateFlow<Boolean> = ledEnabled.asStateFlow()
+        override fun setEnabled(on: Boolean) {
+            ledEnabled.value = on
+        }
+    }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var videoJob: Job? = null
@@ -202,6 +214,20 @@ class JegoatSession(
             s.soTimeout = 1500
         }
         controlSocket = sock
+
+        scope.launch {
+            ledEnabled.collect { on ->
+                // 0x10 0x03 followed by brightness (0..100), uint16 LE.
+                val command = byteArrayOf(0x10, 0x03, if (on) 100 else 0, 0)
+                runCatching {
+                    sock.send(DatagramPacket(command, command.size, addr, controlPort))
+                }.onSuccess {
+                    Log.i(TAG, "LED command sent: ${if (on) 100 else 0}%")
+                }.onFailure {
+                    Log.w(TAG, "LED send failed: ${it.message}")
+                }
+            }
+        }
 
         val pollPacket = DatagramPacket(CTRL_HEARTBEAT, CTRL_HEARTBEAT.size, addr, controlPort)
         val recvBuf = ByteArray(4096)

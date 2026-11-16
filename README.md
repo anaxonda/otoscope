@@ -1,6 +1,6 @@
 <h1 align="center">
 <a href="https://github.com/rbeilvert/otoscope/"><img align="center" src="fastlane/metadata/android/en-US/images/icon.png" alt="otoscope" width="100" /></a><br>
-Otoscope
+Otoscope LED — JEGOAT fork
 </h1>
 
 <p align="center">
@@ -8,6 +8,54 @@ Otoscope
 </p>
 
 ---
+
+## What this fork changes
+
+This fork of [rbeilvert/otoscope](https://github.com/rbeilvert/otoscope) adds the JEGOAT ring-light command documented in [upstream issue #3](https://github.com/rbeilvert/otoscope/issues/3). It is based on upstream commit [`02baa4d`](https://github.com/rbeilvert/otoscope/commit/02baa4d).
+
+- **Light on when connecting:** each new JEGOAT streaming session requests 100% LED brightness.
+- **On/off control:** open **Options → Ring light** while streaming. The switch sends 100% for on and 0% for off; this build does not add a brightness slider.
+- **Camera Wi-Fi routing:** LED commands use the session's existing Wi-Fi-bound control socket, alongside telemetry. No root access, SSH, or ADB commands are needed for normal use.
+- **Distinct app name:** the installed app is called **Otoscope LED**. The downloadable debug APK uses package `dev.rubec.otoscope.debug`, so it installs alongside the original app.
+
+JEGOAT telemetry does not report LED state, so the switch shows the requested state rather than a hardware-confirmed reading. Reconnecting starts with the light on again.
+
+### Download and install
+
+Download [`app-debug.apk`](https://github.com/anaxonda/otoscope/releases/download/v0.11.1-jegoat-led/app-debug.apk) from the [JEGOAT LED release](https://github.com/anaxonda/otoscope/releases/tag/v0.11.1-jegoat-led). This is a debug-signed build, version `0.11.1-debug`.
+
+Install the APK on Android 10 or newer, open **Otoscope LED**, choose **Pair via Bluetooth**, select your `softish-…` camera, and approve the camera Wi-Fi connection. The light turns on when streaming starts. For USB installation:
+
+```bash
+adb install -r app-debug.apk
+```
+
+APK SHA-256:
+
+```text
+58367bca7d065f7b11048fe74a7265f5bf9115e08beb235bbd57672a899a8954
+```
+
+### Protocol and validation
+
+The LED packet is `10 03 LL HH` sent over UDP to the camera's control port, normally `192.168.1.1:61500`. `LL HH` is a little-endian uint16 brightness from 0 to 100. This fork uses `10 03 64 00` for on and `10 03 00 00` for off.
+
+Tested on a JEGOAT reporting `txw810`, firmware v111, with a Samsung Galaxy S10e (`SM-G970F`). The 50% command was physically confirmed to turn the LEDs on. The installed patched app streamed video, sent its initial 100% command, and sent 0%/100% commands through the new Ring light switch. Other camera families were not hardware-tested for this change.
+
+Build and regression checks passed: `assembleDebug`, `testDebugUnitTest` (**129 tests, zero failures**), and `git diff --check`. The release contains the same APK installed during this test.
+
+To build from source with JDK 17 and Android SDK API 37:
+
+```bash
+./gradlew assembleDebug testDebugUnitTest --no-daemon --max-workers=1 \
+  -Dorg.gradle.parallel=false \
+  '-Dorg.gradle.jvmargs=-Xmx1024m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8' \
+  -Pkotlin.compiler.execution.strategy=in-process
+```
+
+The source change is in [`JegoatSession.kt`](app/src/main/kotlin/dev/rubec/otoscope/stream/jegoat/JegoatSession.kt); the existing generic Ring light UI is reused. The app-name change is in [`strings.xml`](app/src/main/res/values/strings.xml). Upstream functionality and its GPL-3.0-or-later license are retained.
+
+## Upstream app
 
 Otoscope is a reverse-engineered drop-in replacement for the proprietary companion apps these cameras ship with, with none of their ad SDKs, analytics, or trackers.
 
@@ -68,7 +116,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | Battery + model readout    | ✅ where the camera exposes it           |
 | Photo / video capture      | ✅ JPEG stills and H.264 MP4 clips        |
 | Capture gallery            | ✅ in-app review, share and delete       |
-| Brightness control    | 🚧 On-Off implemented for EarFairy, Soulear |
+| Brightness control    | 🚧 On-Off implemented for EarFairy, Soulear, JEGOAT |
 
 ## License
 
