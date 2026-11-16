@@ -11,18 +11,21 @@ Otoscope LED — JEGOAT fork
 
 ## What this fork changes
 
+The latest release adds a 0–100% brightness slider and remembers the last nonzero level when toggling the light off and on. The previous `v0.11.1-jegoat-led` release provided on/off control only.
+
 This fork of [rbeilvert/otoscope](https://github.com/rbeilvert/otoscope) adds the JEGOAT ring-light command documented in [upstream issue #3](https://github.com/rbeilvert/otoscope/issues/3). It is based on upstream commit [`02baa4d`](https://github.com/rbeilvert/otoscope/commit/02baa4d).
 
 - **Light on when connecting:** each new JEGOAT streaming session requests 100% LED brightness.
-- **On/off control:** open **Options → Ring light** while streaming. The switch sends 100% for on and 0% for off; this build does not add a brightness slider.
+- **Brightness slider:** open **Options → Ring light** while streaming to select any level from **0–100%** in 1% steps. Changes are sent while you adjust the slider.
+- **On/off control:** off sends 0%; on restores the last nonzero level selected during the current session. Moving the slider above zero turns the light on.
 - **Camera Wi-Fi routing:** LED commands use the session's existing Wi-Fi-bound control socket, alongside telemetry. No root access, SSH, or ADB commands are needed for normal use.
 - **Distinct app name:** the installed app is called **Otoscope LED**. The downloadable debug APK uses package `dev.rubec.otoscope.debug`, so it installs alongside the original app.
 
-JEGOAT telemetry does not report LED state, so the switch shows the requested state rather than a hardware-confirmed reading. Reconnecting starts with the light on again.
+JEGOAT telemetry does not report LED state, so the controls show the requested brightness rather than a hardware-confirmed reading. Reconnecting starts with the light on again.
 
 ### Download and install
 
-Download [`app-debug.apk`](https://github.com/anaxonda/otoscope/releases/download/v0.11.1-jegoat-led/app-debug.apk) from the [JEGOAT LED release](https://github.com/anaxonda/otoscope/releases/tag/v0.11.1-jegoat-led). This is a debug-signed build, version `0.11.1-debug`.
+Download [`app-debug.apk`](https://github.com/anaxonda/otoscope/releases/download/v0.11.2-jegoat-brightness/app-debug.apk) from the [JEGOAT LED release](https://github.com/anaxonda/otoscope/releases/tag/v0.11.2-jegoat-brightness). This is a debug-signed build, version `0.11.2-debug`.
 
 Install the APK on Android 10 or newer, open **Otoscope LED**, choose **Pair via Bluetooth**, select your `softish-…` camera, and approve the camera Wi-Fi connection. The light turns on when streaming starts. For USB installation:
 
@@ -33,16 +36,16 @@ adb install -r app-debug.apk
 APK SHA-256:
 
 ```text
-58367bca7d065f7b11048fe74a7265f5bf9115e08beb235bbd57672a899a8954
+a0e6a72afa0760d4e7fd023a7d623865f1c659893454b9fc0a4867d065065fa7
 ```
 
 ### Protocol and validation
 
-The LED packet is `10 03 LL HH` sent over UDP to the camera's control port, normally `192.168.1.1:61500`. `LL HH` is a little-endian uint16 brightness from 0 to 100. This fork uses `10 03 64 00` for on and `10 03 00 00` for off.
+The LED packet is `10 03 LL HH` sent over UDP to the camera's control port, normally `192.168.1.1:61500`. `LL HH` is a little-endian uint16 brightness from 0 to 100. For example, 25% is `10 03 19 00`, 50% is `10 03 32 00`, 100% is `10 03 64 00`, and off is `10 03 00 00`. Values are clamped to the supported 0–100 range.
 
-Tested on a JEGOAT reporting `txw810`, firmware v111, with a Samsung Galaxy S10e (`SM-G970F`). The 50% command was physically confirmed to turn the LEDs on. The installed patched app streamed video, sent its initial 100% command, and sent 0%/100% commands through the new Ring light switch. Other camera families were not hardware-tested for this change.
+Tested on a JEGOAT reporting `txw810`, firmware v111, with a Samsung Galaxy S10e (`SM-G970F`). The slider's effect on physical LED brightness was confirmed on the device while video was streaming. A Wi-Fi packet capture verified the four-byte brightness commands sent to the camera. The off/on test sent **51% → 0% → 51%** and the UI restored the selected level. Other camera families were not hardware-tested for this change.
 
-Build and regression checks passed: `assembleDebug`, `testDebugUnitTest` (**129 tests, zero failures**), and `git diff --check`. The release contains the same APK installed during this test.
+Build and regression checks passed: `assembleDebug`, `testDebugUnitTest` (**135 tests, zero failures**, including six LED state/protocol regressions), `lintRelease`, and `git diff --check`. The release contains the same APK installed during this test.
 
 To build from source with JDK 17 and Android SDK API 37:
 
@@ -53,7 +56,7 @@ To build from source with JDK 17 and Android SDK API 37:
   -Pkotlin.compiler.execution.strategy=in-process
 ```
 
-The source change is in [`JegoatSession.kt`](app/src/main/kotlin/dev/rubec/otoscope/stream/jegoat/JegoatSession.kt); the existing generic Ring light UI is reused. The app-name change is in [`strings.xml`](app/src/main/res/values/strings.xml). Upstream functionality and its GPL-3.0-or-later license are retained.
+The JEGOAT state and packet encoding live in [`JegoatLedControl.kt`](app/src/main/kotlin/dev/rubec/otoscope/stream/jegoat/JegoatLedControl.kt), with commands sent by [`JegoatSession.kt`](app/src/main/kotlin/dev/rubec/otoscope/stream/jegoat/JegoatSession.kt). The generic Ring light UI shows the slider only for cameras exposing `DimmableLedControl`; other families retain their existing controls. The app-name change is in [`strings.xml`](app/src/main/res/values/strings.xml). Upstream functionality and its GPL-3.0-or-later license are retained.
 
 ## Upstream app
 
@@ -116,7 +119,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | Battery + model readout    | ✅ where the camera exposes it           |
 | Photo / video capture      | ✅ JPEG stills and H.264 MP4 clips        |
 | Capture gallery            | ✅ in-app review, share and delete       |
-| Brightness control    | 🚧 On-Off implemented for EarFairy, Soulear, JEGOAT |
+| Brightness control    | 🚧 JEGOAT: 0–100% slider; EarFairy and Soulear: on/off |
 
 ## License
 

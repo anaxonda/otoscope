@@ -56,7 +56,7 @@ interface CameraSession {
 /** Ring-light control exposed by a [CameraSession]. Vendors that don't
  *  support toggling the LED simply leave [CameraSession.led] null. */
 interface LedControl {
-    /** Latest observed state. Starts null before the camera has confirmed. */
+    /** Latest reported or locally requested state, depending on the vendor. */
     val enabled: StateFlow<Boolean>
 
     /** Fire-and-forget; the camera may take a moment to react. The UI reflects
@@ -64,6 +64,14 @@ interface LedControl {
      *  [enabled] once the camera acknowledges (typically via its telemetry
      *  stream). */
     fun setEnabled(on: Boolean)
+}
+
+/** Optional brightness control for cameras that support dimming. */
+interface DimmableLedControl : LedControl {
+    /** Requested brightness from 0 (off) to 100 (full). */
+    val brightness: StateFlow<Int>
+
+    fun setBrightness(percent: Int)
 }
 
 /** Well-known values for [CameraSession.terminalError]. */

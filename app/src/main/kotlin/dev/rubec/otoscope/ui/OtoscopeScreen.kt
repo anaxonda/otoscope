@@ -62,6 +62,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -77,6 +78,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -89,10 +92,12 @@ import dev.rubec.otoscope.capture.CaptureController
 import dev.rubec.otoscope.capture.CaptureEvent
 import dev.rubec.otoscope.capture.CaptureMode
 import dev.rubec.otoscope.stream.BatteryStatus
+import dev.rubec.otoscope.stream.DimmableLedControl
 import dev.rubec.otoscope.ui.theme.otoscopeTopAppBarColors
 import dev.rubec.otoscope.vendor.CameraVendors
 import dev.rubec.otoscope.vendor.DiscoveryMode
 import dev.rubec.otoscope.vm.CameraState
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -629,13 +634,29 @@ private fun StreamingView(
                     // frame or two.
                     state.session.led?.let { led ->
                         val ledOn by led.enabled.collectAsStateWithLifecycle()
-                        LabeledSwitch(
-                            icon = Icons.Default.Lightbulb,
-                            title = "Ring light",
-                            subtitle = "Toggle the LEDs around the otoscope tip.",
-                            checked = ledOn,
-                            onCheckedChange = { led.setEnabled(it) },
-                        )
+                        val dimmable = led as? DimmableLedControl
+                        val brightness = dimmable?.brightness?.collectAsStateWithLifecycle()?.value
+                        Column {
+                            LabeledSwitch(
+                                icon = Icons.Default.Lightbulb,
+                                title = "Ring light",
+                                subtitle = if (brightness != null) "Brightness: $brightness%"
+                                    else "Toggle the LEDs around the otoscope tip.",
+                                checked = ledOn,
+                                onCheckedChange = { led.setEnabled(it) },
+                            )
+                            if (dimmable != null && brightness != null) {
+                                Slider(
+                                    value = brightness.toFloat(),
+                                    onValueChange = { dimmable.setBrightness(it.roundToInt()) },
+                                    valueRange = 0f..100f,
+                                    steps = 99,
+                                    modifier = Modifier.fillMaxWidth().padding(start = 36.dp).semantics {
+                                        contentDescription = "Ring light brightness"
+                                    },
+                                )
+                            }
+                        }
                     }
 
                     LabeledSwitch(
